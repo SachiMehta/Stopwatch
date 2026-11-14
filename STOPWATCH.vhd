@@ -30,8 +30,7 @@ END TIMER;
 
 ARCHITECTURE a OF TIMER IS
 	---- OUTPUT signals 
-	
-	SIGNAL WATCH_OUT : STD_LOGIC_VECTOR(15 DOWNTO 0); -- general stopwatch ouput (Connect mux from other registers to here)
+	SIGNAL WATCH_DATA_OUT : STD_LOGIC_VECTOR(15 DOWNTO 0); -- general stopwatch ouput (Connect mux from other registers to here)
 
 	--GLOBAL TIMERS
 	SIGNAL REG_FULL : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only uses lowest bit but 16 bits to map easily to output
@@ -64,13 +63,15 @@ ARCHITECTURE a OF TIMER IS
 		lpm_width => 16
 	)
 	PORT MAP (
-		data     => WATCH_OUT,   
+		data     => WATCH_DATA_OUT,   
 		enabledt => IO_EN,
 		tridata  => IO_DATA
 	);
 
 	
 	-- CHANGE all of this 
+	
+	--RECEIVE command/data from SCOMP (SCOMP OUT)
 	PROCESS (CLOCK, RESETN, IO_ADDR, IO_READ)
 	BEGIN
 	-- global reset  
@@ -81,7 +82,28 @@ ARCHITECTURE a OF TIMER IS
 		END IF;
 	END PROCESS;
 	
-	-- Drive IO_DATA when requested.
+	
+	-- SEND register data to SCOMP (SCOMP IN)
+	WITH IO_ADDR SELECT WATCH_OUT <=
+		REG_FULL         WHEN "00001110000", -- 0x070
+		LAP_NUMBER       WHEN "00001110001", -- 0x071
+		CURRENT_RUNNING  WHEN "00001110010", -- 0x072
+		 
+		TIMER_1          WHEN "00001110011", -- 0x073
+		TIMER_2          WHEN "00001110100", -- 0x074
+		TIMER_3          WHEN "00001110101", -- 0x075
+		TIMER_4          WHEN "00001110110", -- 0x076
+		TIMER_5          WHEN "00001110111", -- 0x077
+		TIMER_6          WHEN "00001111000", -- 0x078
+		TIMER_7          WHEN "00001111001", -- 0x079
+		TIMER_8          WHEN "00001111010", -- 0x07A
+		TIMER_9          WHEN "00001111011", -- 0x07B
+		TIMER_10         WHEN "00001111100", -- 0x07C
+		TIMER_11         WHEN "00001111101", -- 0x07D
+		TIMER_12         WHEN "00001111110", -- 0x07E
+		TIMER_13         WHEN "00001111111", -- 0x07F
+		x"0000"          WHEN OTHERS;
+		
 	IO_EN <=
 		'1' WHEN (IO_ADDR(10 DOWNTO 4) = "0000111") AND (IO_READ = '1') -- address is any from x70 to x7F 
 		ELSE '0';
