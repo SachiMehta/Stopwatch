@@ -29,8 +29,8 @@ END TIMER;
 
 
 ARCHITECTURE a OF TIMER IS
+	---- OUTPUT signals 
 	
-	--CHANGE (need to add a lot more signals)
 	SIGNAL WATCH_OUT : STD_LOGIC_VECTOR(15 DOWNTO 0); -- general stopwatch ouput (Connect mux from other registers to here)
 
 	--GLOBAL TIMERS
@@ -53,6 +53,7 @@ ARCHITECTURE a OF TIMER IS
 	SIGNAL TIMER_12 : STD_LOGIC_VECTOR(15 DOWNTO 0);
 	SIGNAL TIMER_13 : STD_LOGIC_VECTOR(15 DOWNTO 0);
 	
+	----OTHER signals 
 	SIGNAL IO_EN     : STD_LOGIC;
 
 	BEGIN
