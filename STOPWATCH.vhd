@@ -69,16 +69,15 @@ ARCHITECTURE a OF TIMER IS
 	);
 
 	
-	-- CHANGE all of this 
-	
 	--RECEIVE command/data from SCOMP (SCOMP OUT)
 	PROCESS (CLOCK, RESETN, IO_ADDR, IO_READ)
 	BEGIN
-	-- global reset  
-		IF (RESETN = '0' OR ((IO_ADDR = "00000000010") AND (IO_WRITE = '1'))) THEN
-			COUNT <= x"0000";
-		ELSIF (rising_edge(CLOCK)) THEN
-			COUNT <= COUNT + 1;
+	-- global reset  CHANGE ALL OF THIS
+		IF (RESETN = '0' OR ((IO_ADDR = "00001110000") AND (IO_WRITE = '1'))) THEN
+			--RESET ALL THE TIMERS
+			
+		--ELSIF (rising_edge(CLOCK)) THEN
+			--COUNT <= COUNT + 1;
 		END IF;
 	END PROCESS;
 	
