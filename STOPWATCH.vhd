@@ -68,16 +68,22 @@ ARCHITECTURE a OF TIMER IS
 		tridata  => IO_DATA
 	);
 
-	
+	--CHANGE ALL OF THIS
 	--RECEIVE command/data from SCOMP (SCOMP OUT)
 	PROCESS (CLOCK, RESETN, IO_ADDR, IO_READ)
 	BEGIN
 	-- global reset  CHANGE ALL OF THIS
 		IF (RESETN = '0' OR ((IO_ADDR = "00001110000") AND (IO_WRITE = '1'))) THEN
 			--RESET ALL THE TIMERS
-			
+		ELSIF ((IO_ADDR = "00001110001") AND (IO_WRITE = '1'))) THEN -- other global functions 
+			--....
 		--ELSIF (rising_edge(CLOCK)) THEN
-			--COUNT <= COUNT + 1;
+			--if timer1 is set to play and within the 14bits data range 
+				--count <= count +1 --(for that timer)
+			-- if timer 2 is set to play and within the 14bits data range
+				-- count 
+			--....
+			
 		END IF;
 	END PROCESS;
 	
