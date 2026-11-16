@@ -1,11 +1,11 @@
 -- STOPWATCH.VHD (a peripheral module for SCOMP)
 -- 2026.11.14
 --
--- Timer returns a 16 bit counter value counting in seconds 
+-- Timer returns a 16 bit counter value counting in seconds
 -- inputs:
 -- outputs:
 
--- Authors: Sachi Mehta, Junwoo Min
+-- Authors: Sachi Mehta, Junwoo Min, Mrinali Jain
 
 LIBRARY IEEE;
 LIBRARY LPM;
@@ -18,8 +18,9 @@ USE LPM.LPM_COMPONENTS.ALL;
 
 ENTITY STOPWATCH IS
 	GENERIC (
-		CLK_HZ  : INTEGER := 5   --  change when testing on hardware
-	)
+		DS_TICKS   : INTEGER   := 5;
+		AUTO_START : STD_LOGIC := '0'
+	);
 	PORT(
 		CLOCK,
 		RESETN   : IN    STD_LOGIC;
@@ -32,128 +33,156 @@ END STOPWATCH;
 
 
 ARCHITECTURE a OF STOPWATCH IS
-	---- OUTPUT signals 
-	SIGNAL WATCH_DATA_OUT : STD_LOGIC_VECTOR(15 DOWNTO 0); -- general stopwatch ouput (Connect mux from other registers to here)
+	TYPE time_array IS ARRAY (1 TO 13) OF STD_LOGIC_VECTOR(13 DOWNTO 0);
+	TYPE reg_array  IS ARRAY (1 TO 13) OF STD_LOGIC_VECTOR(15 DOWNTO 0);
+
+	---- OUTPUT signals
+	SIGNAL WATCH_DATA_OUT  : STD_LOGIC_VECTOR(15 DOWNTO 0); -- general stopwatch ouput (Connect mux from other registers to here)
 
 	--GLOBAL TIMERS
-	SIGNAL REG_FULL : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only uses lowest bit but 16 bits to map easily to output
-	SIGNAL LAP_NUMBER : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only lowest 4 bits used 
-	SIGNAL CURRENT_RUNNING : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only lowest bit used 
-	
+	SIGNAL REG_FULL        : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only uses lowest bit but 16 bits to map easily to output
+	SIGNAL LAP_NUMBER      : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only lowest 4 bits used
+	SIGNAL CURRENT_RUNNING : STD_LOGIC_VECTOR(15 DOWNTO 0); -- only lowest bit used
+
 	-- LAP SELECT
-	SIGNAL TIMER_1 : STD_LOGIC_VECTOR(15 DOWNTO 0); -- highest bit tells if lap is running, next bit is blank, remaining 14 bits show timer data 
-	SIGNAL TIMER_2 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_3 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_4 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_5 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_6 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_7 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_8 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_9 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_10 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_11 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_12 : STD_LOGIC_VECTOR(15 DOWNTO 0);
-	SIGNAL TIMER_13 : STD_LOGIC_VECTOR(15 DOWNTO 0);
+	SIGNAL TIMER           : reg_array;                     -- highest bit tells if lap is running, next bit is blank, remaining 14 bits show timer data
 
 	-- Internal signals
-	TYPE time_array IS ARRAY (1 TO 13) OF STD_LOGIC_VECTOR(8 DOWNTO 0);
-	SIGNAL LAP_TIME : time_array;                          -- 9-bit seconds count for each lap
-	SIGNAL RUN_BIT  : STD_LOGIC_VECTOR(1 TO 13);           -- Run flag per lap
-	SIGNAL cur_lap  : INTEGER RANGE 1 TO 13;
-	SIGNAL running  : STD_LOGIC;
-	SIGNAL full     : STD_LOGIC;
-	SIGNAL count : INTEGER RANGE 0 TO CLK_HZ-1;        -- clock divider for 1 second
-	
-	----OTHER signals 
-	SIGNAL IO_EN     : STD_LOGIC;
+	SIGNAL LAP_TIME   : time_array;
+	SIGNAL lap_run    : STD_LOGIC_VECTOR(1 TO 13);
+	SIGNAL cur_lap    : INTEGER RANGE 1 TO 13;
+	SIGNAL full       : STD_LOGIC;
+	SIGNAL count      : INTEGER RANGE 0 TO DS_TICKS-1;
+	SIGNAL write_prev : STD_LOGIC;
 
-	BEGIN
-	
+	----OTHER signals
+	SIGNAL IO_EN      : STD_LOGIC;
+
+BEGIN
+
 	-- Use LPM function to create bidirection I/O data bus
 	IO_BUS: lpm_bustri
 	GENERIC MAP (
 		lpm_width => 16
 	)
 	PORT MAP (
-		data     => WATCH_DATA_OUT,   
+		data     => WATCH_DATA_OUT,
 		enabledt => IO_EN,
 		tridata  => IO_DATA
 	);
-	
 
-	--CHANGE ALL OF THIS
+
 	--RECEIVE command/data from SCOMP (SCOMP OUT)
-	PROCESS (CLOCK, RESETN, IO_ADDR, IO_READ)
+	PROCESS (CLOCK, RESETN)
+		VARIABLE tick : BOOLEAN;
+		VARIABLE sel  : INTEGER RANGE 1 TO 13;
+		VARIABLE nxt  : INTEGER RANGE 1 TO 13;
 	BEGIN
-	-- global reset  CHANGE ALL OF THIS
-		IF (RESETN = '0' OR ((IO_ADDR = "00001110000") AND (IO_WRITE = '1'))) THEN
-			--RESET ALL THE TIMERS
+		IF RESETN = '0' THEN
 			FOR i IN 1 TO 13 LOOP
 				LAP_TIME(i) <= (OTHERS => '0');
 			END LOOP;
-			cur_lap  <= 1;
-			full     <= '0';
-			count <= 0;
-		ELSIF ((IO_ADDR = "00001110001") AND (IO_WRITE = '1')) THEN -- other global functions 
-			--....
-		--ELSIF (rising_edge(CLOCK)) THEN
-			--if timer1 is set to play and within the 14bits data range 
-				--count <= count +1 --(for that timer)
-			-- if timer 2 is set to play and within the 14bits data range
-				-- count 
-			--....
-			
+			lap_run    <= (1 => AUTO_START, OTHERS => '0');
+			cur_lap    <= 1;
+			full       <= '0';
+			count      <= 0;
+			write_prev <= '0';
+
+		ELSIF RISING_EDGE(CLOCK) THEN
+			write_prev <= IO_WRITE;
+
+			tick := FALSE;
+			IF count = DS_TICKS-1 THEN
+				count <= 0;
+				tick  := TRUE;
+			ELSE
+				count <= count + 1;
+			END IF;
+
+			IF tick THEN
+				FOR i IN 1 TO 13 LOOP
+					IF lap_run(i) = '1' AND LAP_TIME(i) /= "11111111111111" THEN
+						LAP_TIME(i) <= LAP_TIME(i) + 1;
+					END IF;
+				END LOOP;
+			END IF;
+
+			IF IO_WRITE = '1' AND write_prev = '0' AND IO_ADDR(10 DOWNTO 4) = "0000111" THEN
+				CASE IO_ADDR(3 DOWNTO 0) IS
+
+					WHEN "0000" =>
+						FOR i IN 1 TO 13 LOOP
+							LAP_TIME(i) <= (OTHERS => '0');
+						END LOOP;
+						lap_run <= (1 => AUTO_START, OTHERS => '0');
+						cur_lap <= 1;
+						full    <= '0';
+						count   <= 0;
+
+					WHEN "0001" =>
+						lap_run(cur_lap) <= NOT lap_run(cur_lap);
+
+					WHEN "0010" =>
+						IF cur_lap = 13 THEN
+							nxt := 1;
+						ELSE
+							nxt := cur_lap + 1;
+						END IF;
+						lap_run(cur_lap) <= '0';
+						lap_run(nxt)     <= '1';
+						LAP_TIME(nxt)    <= (OTHERS => '0');
+						cur_lap          <= nxt;
+						IF nxt = 13 THEN
+							full <= '1';
+						END IF;
+
+					WHEN OTHERS =>
+						sel := CONV_INTEGER(IO_ADDR(3 DOWNTO 0)) - 2;
+						CASE IO_DATA(15 DOWNTO 14) IS
+							WHEN "00"   => LAP_TIME(sel) <= (OTHERS => '0');
+							WHEN "01"   => lap_run(sel)  <= NOT lap_run(sel);
+							WHEN "10"   => LAP_TIME(sel) <= IO_DATA(13 DOWNTO 0);
+							WHEN OTHERS => NULL;
+						END CASE;
+
+				END CASE;
+			END IF;
 		END IF;
 	END PROCESS;
-	
-	
+
+
 	-- SEND register data to SCOMP (SCOMP IN)
 	WITH IO_ADDR SELECT WATCH_DATA_OUT <=
 		REG_FULL         WHEN "00001110000", -- 0x070
-		LAP_NUMBER       WHEN "00001110001", -- 0x071
-		CURRENT_RUNNING  WHEN "00001110010", -- 0x072
-		 
-		TIMER_1          WHEN "00001110011", -- 0x073
-		TIMER_2          WHEN "00001110100", -- 0x074
-		TIMER_3          WHEN "00001110101", -- 0x075
-		TIMER_4          WHEN "00001110110", -- 0x076
-		TIMER_5          WHEN "00001110111", -- 0x077
-		TIMER_6          WHEN "00001111000", -- 0x078
-		TIMER_7          WHEN "00001111001", -- 0x079
-		TIMER_8          WHEN "00001111010", -- 0x07A
-		TIMER_9          WHEN "00001111011", -- 0x07B
-		TIMER_10         WHEN "00001111100", -- 0x07C
-		TIMER_11         WHEN "00001111101", -- 0x07D
-		TIMER_12         WHEN "00001111110", -- 0x07E
-		TIMER_13         WHEN "00001111111", -- 0x07F
+		CURRENT_RUNNING  WHEN "00001110001", -- 0x071
+		LAP_NUMBER       WHEN "00001110010", -- 0x072
+
+		TIMER(1)         WHEN "00001110011", -- 0x073
+		TIMER(2)         WHEN "00001110100", -- 0x074
+		TIMER(3)         WHEN "00001110101", -- 0x075
+		TIMER(4)         WHEN "00001110110", -- 0x076
+		TIMER(5)         WHEN "00001110111", -- 0x077
+		TIMER(6)         WHEN "00001111000", -- 0x078
+		TIMER(7)         WHEN "00001111001", -- 0x079
+		TIMER(8)         WHEN "00001111010", -- 0x07A
+		TIMER(9)         WHEN "00001111011", -- 0x07B
+		TIMER(10)        WHEN "00001111100", -- 0x07C
+		TIMER(11)        WHEN "00001111101", -- 0x07D
+		TIMER(12)        WHEN "00001111110", -- 0x07E
+		TIMER(13)        WHEN "00001111111", -- 0x07F
 		x"0000"          WHEN OTHERS;
-		
+
 	IO_EN <=
-		'1' WHEN (IO_ADDR(10 DOWNTO 4) = "0000111") AND (IO_READ = '1') -- address is any from x70 to x7F 
+		'1' WHEN (IO_ADDR(10 DOWNTO 4) = "0000111") AND (IO_READ = '1') -- address is any from x70 to x7F
 		ELSE '0';
 
 	-- Internal Signals into register
-	REG_FULL        <= (15 DOWNTO 1 => '0') & full;
-	CURRENT_RUNNING <= (15 DOWNTO 1 => '0') & running;
+	REG_FULL        <= "000000000000000" & full;
+	CURRENT_RUNNING <= "000000000000000" & lap_run(cur_lap);
 	LAP_NUMBER      <= CONV_STD_LOGIC_VECTOR(cur_lap, 16);
 
-	RUN_FLAGS: FOR i IN 1 TO 13 GENERATE
-		RUN_BIT(i) <= '1' WHEN (cur_lap = i AND running = '1') ELSE '0';
+	TIMER_REGS: FOR i IN 1 TO 13 GENERATE
+		TIMER(i) <= lap_run(i) & '0' & LAP_TIME(i);
 	END GENERATE;
 
-	TIMER_1  <= RUN_BIT(1)  & "000000" & LAP_TIME(1);
-	TIMER_2  <= RUN_BIT(2)  & "000000" & LAP_TIME(2);
-	TIMER_3  <= RUN_BIT(3)  & "000000" & LAP_TIME(3);
-	TIMER_4  <= RUN_BIT(4)  & "000000" & LAP_TIME(4);
-	TIMER_5  <= RUN_BIT(5)  & "000000" & LAP_TIME(5);
-	TIMER_6  <= RUN_BIT(6)  & "000000" & LAP_TIME(6);
-	TIMER_7  <= RUN_BIT(7)  & "000000" & LAP_TIME(7);
-	TIMER_8  <= RUN_BIT(8)  & "000000" & LAP_TIME(8);
-	TIMER_9  <= RUN_BIT(9)  & "000000" & LAP_TIME(9);
-	TIMER_10 <= RUN_BIT(10) & "000000" & LAP_TIME(10);
-	TIMER_11 <= RUN_BIT(11) & "000000" & LAP_TIME(11);
-	TIMER_12 <= RUN_BIT(12) & "000000" & LAP_TIME(12);
-	TIMER_13 <= RUN_BIT(13) & "000000" & LAP_TIME(13);
-
 END a;
-
