@@ -75,7 +75,7 @@ ARCHITECTURE a OF STOPWATCH IS
 	-- global reset  CHANGE ALL OF THIS
 		IF (RESETN = '0' OR ((IO_ADDR = "00001110000") AND (IO_WRITE = '1'))) THEN
 			--RESET ALL THE TIMERS
-		ELSIF ((IO_ADDR = "00001110001") AND (IO_WRITE = '1'))) THEN -- other global functions 
+		ELSIF ((IO_ADDR = "00001110001") AND (IO_WRITE = '1')) THEN -- other global functions 
 			--....
 		--ELSIF (rising_edge(CLOCK)) THEN
 			--if timer1 is set to play and within the 14bits data range 
